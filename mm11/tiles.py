@@ -23,9 +23,11 @@ def init_game_board_from_user_input(user_input):
     return board
 
 
-def get_valid_moves(board, prev_move=''):
+def get_valid_moves(board, prev_move='') -> list:
     """ Valid moves are l, r, d, u (left, right, down, up)
     0 blocks from y:left and x:up, 2 blocks from x:down and y:right
+    prev move cannot be countered (if u moved left, you cannot go right)
+    returns dictionary of valid moves.
     """
     valid_moves = {'l', 'r', 'd', 'u'}
     opposite_moves = {'': '',
@@ -48,7 +50,7 @@ def get_valid_moves(board, prev_move=''):
     if empty_cell_loc[1] == 2:
         valid_moves.discard('r')
 
-    return valid_moves
+    return list(valid_moves)
 
 
 def get_swapping_indices(empty_cell_loc, move):
@@ -61,17 +63,17 @@ def get_swapping_indices(empty_cell_loc, move):
     ec_y = empty_cell_loc[1][0]
 
     if move == 'l':
-        x = ec_x;
+        x = ec_x
         y = ec_y - 1
     if move == 'r':
-        x = ec_x;
+        x = ec_x
         y = ec_y + 1
 
     if move == 'u':
-        x = ec_x - 1;
+        x = ec_x - 1
         y = ec_y
     if move == 'd':
-        x = ec_x + 1;
+        x = ec_x + 1
         y = ec_y
 
     return x, y
@@ -86,20 +88,37 @@ def make_move(board, move):
     return board
 
 
+def hash_board(board):
+    """ given board returns hashed value """
+    arr = np.repeat(10, 9)
+    pwr = np.arange(0, 9)
+    mults = np.power(arr, pwr).reshape((3, 3))
+    _hash = np.sum(board * mults)
+    return _hash
+
+
 def solve_game(board):
+    states = set()
     states_moves_queue = queue.Queue()
     winning_boards = get_winning_boards()
     # Case we got a winning board first move! :>
     for win_board in winning_boards:
         if check_win(board, win_board):
-            return True
+            return True, 0
 
     move = ''
+    counter = 0
     while True:
-
+        counter += 1
         valid_moves = get_valid_moves(board, move)
+        _hash = hash_board(board)
+
         for move in valid_moves:
-            states_moves_queue.put((move, board))
+            if (move, _hash) in states:
+                continue
+            else:
+                states_moves_queue.put((move, board.copy()))
+                states.add((move, _hash))
 
         move, board = states_moves_queue.get()
 
@@ -109,11 +128,13 @@ def solve_game(board):
         board = make_move(board, move)
         for win_board in winning_boards:
             if check_win(board, win_board):
-                return True
+                print(board)
+                return True, counter
 
 
 def testing_funcs():
     user_input = "1 4 0 5 8 2 3 6 7"
+
     board = init_game_board_from_user_input(user_input)
     print(board)
     valid_moves = get_valid_moves(board)
@@ -126,9 +147,11 @@ def testing_funcs():
 
 def main():
     user_input = "1 4 0 5 8 2 3 6 7"
+    user_input = "1 2 3 4 5 6 7 0 8"
     board = init_game_board_from_user_input(user_input)
-    did_solve = solve_game(board)
+    did_solve, counter = solve_game(board)
     print(did_solve)
+    print(f'moves it took {counter}')
 
 
 if __name__ == '__main__':
