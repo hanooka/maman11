@@ -18,7 +18,7 @@ def check_win(board: np.ndarray, winning_board: np.ndarray):
 
 def init_game_board_from_user_input(user_input):
     """ init a board game from user string. """
-    board = np.fromstring(user_input, dtype=np.uint8, sep=' ')
+    board = np.fromstring(user_input, dtype=np.int8, sep=' ')
     board = board.reshape((3, 3))
     return board
 
