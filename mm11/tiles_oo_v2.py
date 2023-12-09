@@ -17,6 +17,15 @@ def manhattan_distance(board1, board2):
     return distance_matrix
 
 
+def count_direct_reversal(board1, board2):
+    indices = [((1, 1), (2, 1)), ((1, 0), (2, 0)), ((1, 0), (1, 1)), ((0, 0), (0, 1)), ((0, 2), (1, 2)), ((1, 1), (1, 2)), ((2, 1), (2, 2)), ((2, 0), (2, 1)), ((0, 1), (0, 2)), ((0, 1), (1, 1)), ((0, 0), (1, 0)), ((1, 2), (2, 2))]
+    count = 0
+    for ind1, ind2 in indices:
+        if board1[ind1] == board2[ind2] and board2[ind1] == board1[ind2]:
+            count+= 1
+    return count
+
+
 class PriorityQueue:
     def __init__(self):
         self.heap = []
@@ -223,7 +232,12 @@ class TilesGame():
 
         elif str(dist_metric).lower() == 'manh':
             dist_mat = manhattan_distance(board1, board2)
-            return np.sum(dist_mat**2)
+            return np.sum(dist_mat)
+
+        elif str(dist_metric).lower() =='impr_manh':
+            manh_dist = np.sum(manhattan_distance(board1, board2))
+            count = count_direct_reversal(board1, board2)
+            return manh_dist + count
 
         else:
             raise ValueError(f"{dist_metric} is not supported.")
@@ -318,7 +332,7 @@ class GBFSTilesAgent(TilesAgent):
     def get_priority(self, state):
         """ This function represents f(n) = h(n). `ThE HeUrIsTic` """
         winning_board = self.game.get_winning_boards()[0]
-        priority = self.game.calculate_distance(state, winning_board, 'l1')
+        priority = self.game.calculate_distance(state, winning_board, 'impr_manh')
         return priority
 
     def solve(self):
@@ -428,10 +442,16 @@ class BFSTilesAgent(TilesAgent):
 def main():
     user_input = "1 4 0 5 8 2 3 6 7"
     user_input = "1 2 4 5 3 6 7 8 0"
+    user_input = "8 0 5 4 3 6 7 1 2"
     #
     game = TilesGame()
-    #board1 = game.init_board("0 1 2 3 4 5 6 8 7")
-    #board2 = game.init_board("1 4 0 5 8 2 3 6 7")
+    # board1 = game.init_board("0 1 2 3 4 5 6 8 7")
+    # board2 = game.init_board("3 1 2 0 8 5 6 4 7")
+    #
+    # cnt = count_direct_reversal(board1, board2)
+    # print(cnt)
+    # quit()
+
     board = game.init_board(user_input)
     #dist = game.calculate_distance(board1, board2, 'l1')
     #print(dist)
