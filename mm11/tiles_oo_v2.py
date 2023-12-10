@@ -112,6 +112,18 @@ class TilesGame():
                 return True
         return False
 
+
+    def is_solvable(self, _board):
+        """ Check if given board is winnable (vs the winning boards).
+        Theoretically, if there are even swaps, board is solvable. """
+        board = _board.copy()
+        for winning_board in self.winning_boards:
+            swaps = self.get_swaps_to_win(board, winning_board)
+            if swaps % 2 == 0:
+                return True
+        return False
+
+
     def get_winning_boards(self):
         """ return list of winning positions """
         win1 = np.arange(0, 9).reshape((3, 3))
@@ -124,11 +136,23 @@ class TilesGame():
         return _hash
 
     @staticmethod
+    def is_input_correct(input_str):
+        numbers = input_str.split()
+        len_9 = len(numbers) == 9
+        no_repeats = len(set(numbers)) == len(numbers)
+        all_digits_0_8 = all(0 <= int(num) <= 8 for num in numbers if num.isdigit())
+        return len_9 and no_repeats and all_digits_0_8
+
+
+    @staticmethod
     def init_board(user_input):
         """ init a board game from user string. """
-        board = np.fromstring(user_input, dtype=np.int8, sep=' ')
-        board = board.reshape((3, 3))
-        return board
+        if TilesGame.is_input_correct(user_input):
+            board = np.fromstring(user_input, dtype=np.int8, sep=' ')
+            board = board.reshape((3, 3))
+            return board
+        else:
+            raise ValueError(f"Input {user_input} is incorrect.")
 
     @staticmethod
     def get_valid_moves(board, prev_move='') -> list:
@@ -214,7 +238,7 @@ class TilesGame():
             exch_idx = np.where(board_arr == val)[0]
 
             if board_arr[ind] != win_board_arr[ind]:
-                board_arr[ind], board_arr[exch_idx] = board_arr[exch_idx], board_arr[ind]
+                board_arr[ind], board_arr[exch_idx] = board_arr[exch_idx].item(), board_arr[ind].item()
                 swaps += 1
 
         return swaps
@@ -245,11 +269,11 @@ class TilesGame():
 
 
 class TilesAgent():
-    def __init__(self, name, state, game):
+    def __init__(self, name, state: np.ndarray, game):
         self.name = name
         self.explored = set()
         self.counter_expends = 0
-        self.init_state = state
+        self.init_state = state.copy()
         self.game = game
 
 
@@ -257,10 +281,11 @@ class TilesAgent():
 class ASTARTilesAgent(TilesAgent):
     """ agent state is the games board """
 
-    def __init__(self, state: np.ndarray, game: TilesGame, alpha=0.5):
+    def __init__(self, state: np.ndarray, game: TilesGame, alpha=0.5, dist_metric='l1'):
         super().__init__(name="A_STAR", state=state, game=game)
         # We use deque (which is 2 side queue. We push and pop from same side to simulate a stack)
         self.frontier = PriorityQueue()
+        self.dist_metric = dist_metric
         self.alpha=alpha
 
     def get_correct_winning_board(self, init_state):
@@ -279,7 +304,7 @@ class ASTARTilesAgent(TilesAgent):
         also added alpha and 1-alpha as weights, so we can fiddle around.
         for example if alpha = 0, we get a greedy-first-best-search. """
         winning_board = self.game.get_winning_boards()[0]
-        priority = 2 * ((1 - self.alpha) * self.game.calculate_distance(state, winning_board, 'l1')
+        priority = 2 * ((1 - self.alpha) * self.game.calculate_distance(state, winning_board, self.dist_metric)
                         + self.alpha * accum_cost)
         return priority
 
@@ -313,10 +338,11 @@ class ASTARTilesAgent(TilesAgent):
 class GBFSTilesAgent(TilesAgent):
     """ agent state is the games board """
 
-    def __init__(self, state: np.ndarray, game: TilesGame):
+    def __init__(self, state: np.ndarray, game: TilesGame, dist_metric='l1'):
         super().__init__(name="GBFS", state=state, game=game)
         # We use deque (which is 2 side queue. We push and pop from same side to simulate a stack)
         self.frontier = PriorityQueue()
+        self.dist_metric='l1'
 
     def get_correct_winning_board(self, init_state):
         """ Math properties of the problem. in order for a board to be solvable (getting from state 1 to 2,
@@ -332,7 +358,7 @@ class GBFSTilesAgent(TilesAgent):
     def get_priority(self, state):
         """ This function represents f(n) = h(n). `ThE HeUrIsTic` """
         winning_board = self.game.get_winning_boards()[0]
-        priority = self.game.calculate_distance(state, winning_board, 'impr_manh')
+        priority = self.game.calculate_distance(state, winning_board, self.dist_metric)
         return priority
 
     def solve(self):
@@ -369,7 +395,7 @@ class IDDFSTilesAgent(TilesAgent):
         # We use deque (which is 2 side queue. We push and pop from same side to simulate a stack)
         self.frontier = Stack()
 
-    def solve(self, max_depth=20):
+    def solve(self, max_depth=30):
         for i in range(1, max_depth + 1):
             solution = self.dfs_traverse(i)
             if solution is not None:
@@ -437,90 +463,53 @@ class BFSTilesAgent(TilesAgent):
                     self.explored.add(new_state_hash)
                     new_node = Node(new_state, parent=curr_node, action=move, actioned_tile=actioned_tile)
                     self.frontier.put(new_node)
+        return None
 
 
 def main():
     user_input = "1 4 0 5 8 2 3 6 7"
+
+    # Hard inputs
+    user_input = "4 7 3 2 8 5 1 0 6"
+
     user_input = "1 2 4 5 3 6 7 8 0"
     user_input = "8 0 5 4 3 6 7 1 2"
-    #
+    user_input = "1 3 5 7 2 4 6 8 0"
+    user_input = "2 0 4 1 3 8 7 6 5"
+    user_input = "8 2 1 5 3 7 4 6 0"
+    #user_input = "8 2 1 5 3 7 0 4 6"
+    #user_input = "4 1 8 0 2 5 3 7 6"
+    #user_input = "1 2 4 3 8 7 5 6 0"
+    #user_input = "1 4 2 3 8 7 5 6 0"
+    #user_input = "1 4 2 3 7 8 5 6 0"
+
     game = TilesGame()
-    # board1 = game.init_board("0 1 2 3 4 5 6 8 7")
-    # board2 = game.init_board("3 1 2 0 8 5 6 4 7")
-    #
-    # cnt = count_direct_reversal(board1, board2)
-    # print(cnt)
-    # quit()
 
     board = game.init_board(user_input)
-    #dist = game.calculate_distance(board1, board2, 'l1')
-    #print(dist)
-    #quit()
 
+    solvable = game.is_solvable(board)
+    if not solvable:
+        print(f"Input {user_input} is not solvable. Exiting..")
+        quit()
 
-    # a = game.get_swaps_to_win(board, game.get_winning_boards()[1])
-    # a = game.get_swaps_to_win(board1, board2)
-    # print(a)
-    # quit()
-
+    dist_metric = 'l1'
+    alpha = 0.5
     bfs_agent = BFSTilesAgent(board, game)
-    winning_node = bfs_agent.solve()
-
-    if winning_node is not None:
-        print(bfs_agent.name)
-        print(bfs_agent.counter_expends)
-        print(winning_node.get_path())
-        print()
-
-    game = TilesGame()
-    board = game.init_board(user_input)
     iddfs_agent = IDDFSTilesAgent(board, game)
+    gbfs_agent = GBFSTilesAgent(board, game, dist_metric=dist_metric)
+    a_star_agent = ASTARTilesAgent(board, game, alpha=alpha, dist_metric=dist_metric)
 
-    winning_node = iddfs_agent.solve(24)
+    agents = [bfs_agent, gbfs_agent, a_star_agent]
 
-    if winning_node is not None:
-
-        print(iddfs_agent.name)
-        print(iddfs_agent.counter_expends)
-        print(winning_node.get_path())
-        print()
-
-    else:
-        print("no solution")
-
-
-    game = TilesGame()
-    board = game.init_board(user_input)
-    gbfs_agent = GBFSTilesAgent(board, game)
-
-    winning_node = gbfs_agent.solve()
-
-    if winning_node is not None:
-
-        print(gbfs_agent.name)
-        print(gbfs_agent.counter_expends)
-        print(winning_node.get_path())
-        print()
-
-    else:
-        print("no solution")
-
-
-    game = TilesGame()
-    board = game.init_board(user_input)
-    a_star_agent = ASTARTilesAgent(board, game)
-
-    winning_node = a_star_agent.solve()
-
-    if winning_node is not None:
-        print(a_star_agent.name)
-        print(a_star_agent.counter_expends)
-        print(winning_node.get_path())
-        print()
-
-    else:
-        print("no solution")
-
+    for agent in agents:
+        winning_node = agent.solve()
+        if winning_node is not None:
+            print(agent.name)
+            print(agent.counter_expends)
+            print(winning_node.get_path())
+            print()
+        else:
+            print(f"{agent.name} failed to solve")
 
 
 if __name__ == '__main__':
