@@ -1,8 +1,8 @@
+import sys
 import queue
 from collections import deque
 import numpy as np
 import heapq
-from scipy.spatial.distance import cdist
 
 
 def manhattan_distance(board1, board2):
@@ -18,11 +18,14 @@ def manhattan_distance(board1, board2):
 
 
 def count_direct_reversal(board1, board2):
-    indices = [((1, 1), (2, 1)), ((1, 0), (2, 0)), ((1, 0), (1, 1)), ((0, 0), (0, 1)), ((0, 2), (1, 2)), ((1, 1), (1, 2)), ((2, 1), (2, 2)), ((2, 0), (2, 1)), ((0, 1), (0, 2)), ((0, 1), (1, 1)), ((0, 0), (1, 0)), ((1, 2), (2, 2))]
+    """ All pairs of neighbors in the 8-tile problem. """
+    indices = [((1, 1), (2, 1)), ((1, 0), (2, 0)), ((1, 0), (1, 1)), ((0, 0), (0, 1)),
+               ((0, 2), (1, 2)), ((1, 1), (1, 2)), ((2, 1), (2, 2)), ((2, 0), (2, 1)),
+               ((0, 1), (0, 2)), ((0, 1), (1, 1)), ((0, 0), (1, 0)), ((1, 2), (2, 2))]
     count = 0
     for ind1, ind2 in indices:
         if board1[ind1] == board2[ind2] and board2[ind1] == board1[ind2]:
-            count+= 1
+            count += 1
     return count
 
 
@@ -67,7 +70,7 @@ class Stack:
         return len(self.items)
 
 
-class Node():
+class Node:
     def __init__(self, state, parent=None, action='', actioned_tile=None, cost=1, solved=False, **kwargs):
         """ parent => previous state,
         action => action made on parent to get us to current state.
@@ -112,10 +115,10 @@ class TilesGame():
                 return True
         return False
 
-
     def is_solvable(self, _board):
         """ Check if given board is winnable (vs the winning boards).
-        Theoretically, if there are even swaps, board is solvable. """
+        Theoretically, if there are even swaps, board is solvable.
+        (looks like this works only for 2k X 2k board) """
         board = _board.copy()
         for winning_board in self.winning_boards:
             swaps = self.get_swaps_to_win(board, winning_board)
@@ -123,12 +126,11 @@ class TilesGame():
                 return True
         return False
 
-
     def get_winning_boards(self):
         """ return list of winning positions """
         win1 = np.arange(0, 9).reshape((3, 3))
         win2 = np.concatenate((np.arange(1, 9), [0])).reshape((3, 3))
-        return [win1, win2]
+        return [win1]  # , win2]
 
     def hash_board(self, board):
         """ given board returns hashed value """
@@ -143,11 +145,11 @@ class TilesGame():
         all_digits_0_8 = all(0 <= int(num) <= 8 for num in numbers if num.isdigit())
         return len_9 and no_repeats and all_digits_0_8
 
-
     @staticmethod
     def init_board(user_input):
         """ init a board game from user string. """
-        if TilesGame.is_input_correct(user_input):
+        is_input_correct = TilesGame.is_input_correct(user_input)
+        if is_input_correct:
             board = np.fromstring(user_input, dtype=np.int8, sep=' ')
             board = board.reshape((3, 3))
             return board
@@ -246,26 +248,34 @@ class TilesGame():
     @staticmethod
     def calculate_distance(board1, board2, dist_metric='l2'):
         if str(dist_metric).lower() == 'l2':
-            return np.sqrt(np.sum(np.power(board1-board2, 2)))
+            """ fail implementation.. this count tiles instead of game rules.. """
+            return np.sqrt(np.sum(np.power(board1 - board2, 2)))
 
         elif str(dist_metric).lower() == 'l1':
+            """ lol what is this? this is not admissible :> """
             return np.sum(np.abs(board1 - board2))
 
         elif str(dist_metric).lower() == 'diff':
-            return np.sum(np.array(board2==board1).astype('int8'))
+            return np.sum(np.array(board2 != board1).astype('int8'))
 
         elif str(dist_metric).lower() == 'manh':
             dist_mat = manhattan_distance(board1, board2)
             return np.sum(dist_mat)
 
-        elif str(dist_metric).lower() =='impr_manh':
+        elif str(dist_metric).lower() == 'crazy_manh':
+            """ not admissible :> """
+            dist_mat = manhattan_distance(board1, board2)
+            dist_mat = np.where(dist_mat >= 1, dist_mat * 3, dist_mat)
+            return np.sum(dist_mat)
+
+        elif str(dist_metric).lower() == 'impr_manh':
+            """ This is a deal breaker! """
             manh_dist = np.sum(manhattan_distance(board1, board2))
             count = count_direct_reversal(board1, board2)
-            return manh_dist + count
+            return manh_dist + count * 2
 
         else:
             raise ValueError(f"{dist_metric} is not supported.")
-
 
 
 class TilesAgent():
@@ -277,7 +287,6 @@ class TilesAgent():
         self.game = game
 
 
-
 class ASTARTilesAgent(TilesAgent):
     """ agent state is the games board """
 
@@ -286,7 +295,7 @@ class ASTARTilesAgent(TilesAgent):
         # We use deque (which is 2 side queue. We push and pop from same side to simulate a stack)
         self.frontier = PriorityQueue()
         self.dist_metric = dist_metric
-        self.alpha=alpha
+        self.alpha = alpha
 
     def get_correct_winning_board(self, init_state):
         """ Math properties of the problem. in order for a board to be solvable (getting from state 1 to 2,
@@ -330,7 +339,7 @@ class ASTARTilesAgent(TilesAgent):
                 if new_state_hash not in self.explored:
                     self.explored.add(new_state_hash)
                     new_node = Node(new_state, parent=curr_node, action=move, actioned_tile=actioned_tile,
-                                    accum_cost=curr_node.accum_cost+1)
+                                    accum_cost=curr_node.accum_cost + 1)
                     priority = self.get_priority(new_node.state, new_node.accum_cost)
                     self.frontier.put(new_node, priority)
 
@@ -342,7 +351,7 @@ class GBFSTilesAgent(TilesAgent):
         super().__init__(name="GBFS", state=state, game=game)
         # We use deque (which is 2 side queue. We push and pop from same side to simulate a stack)
         self.frontier = PriorityQueue()
-        self.dist_metric='l1'
+        self.dist_metric = 'l1'
 
     def get_correct_winning_board(self, init_state):
         """ Math properties of the problem. in order for a board to be solvable (getting from state 1 to 2,
@@ -466,40 +475,37 @@ class BFSTilesAgent(TilesAgent):
         return None
 
 
-def main():
+"""
+Input examples
     user_input = "1 4 0 5 8 2 3 6 7"
-
-    # Hard inputs
-    user_input = "4 7 3 2 8 5 1 0 6"
-
     user_input = "1 2 4 5 3 6 7 8 0"
-    user_input = "8 0 5 4 3 6 7 1 2"
     user_input = "1 3 5 7 2 4 6 8 0"
-    user_input = "2 0 4 1 3 8 7 6 5"
     user_input = "8 2 1 5 3 7 4 6 0"
-    #user_input = "8 2 1 5 3 7 0 4 6"
-    #user_input = "4 1 8 0 2 5 3 7 6"
-    #user_input = "1 2 4 3 8 7 5 6 0"
-    #user_input = "1 4 2 3 8 7 5 6 0"
-    #user_input = "1 4 2 3 7 8 5 6 0"
+    user_input = "8 0 5 4 3 6 7 1 2"
+    user_input = "8 2 1 5 3 7 0 4 6"
+    user_input = "4 1 8 0 2 5 3 7 6"
+    user_input = "1 2 4 3 8 7 5 6 0"
+    user_input = "1 4 2 3 7 8 5 6 0"
+"""
+
+
+def main(argv):
+    if len(argv) > 1:
+        user_input = " ".join(argv[1:])
+    else:
+        raise ValueError("No argument were given.")
 
     game = TilesGame()
-
     board = game.init_board(user_input)
-
-    solvable = game.is_solvable(board)
-    if not solvable:
-        print(f"Input {user_input} is not solvable. Exiting..")
-        quit()
-
-    dist_metric = 'l1'
+    dist_metric = 'impr_manh'
     alpha = 0.5
+
     bfs_agent = BFSTilesAgent(board, game)
     iddfs_agent = IDDFSTilesAgent(board, game)
     gbfs_agent = GBFSTilesAgent(board, game, dist_metric=dist_metric)
     a_star_agent = ASTARTilesAgent(board, game, alpha=alpha, dist_metric=dist_metric)
 
-    agents = [bfs_agent, gbfs_agent, a_star_agent]
+    agents = [bfs_agent, iddfs_agent, gbfs_agent, a_star_agent]
 
     for agent in agents:
         winning_node = agent.solve()
@@ -513,4 +519,4 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv)
