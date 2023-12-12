@@ -290,15 +290,17 @@ class TilesAgent():
 class ASTARTilesAgent(TilesAgent):
     """ agent state is the games board """
 
-    def __init__(self, state: np.ndarray, game: TilesGame, alpha=0.5, dist_metric='l1'):
+    def __init__(self, state: np.ndarray, game: TilesGame, alpha=0.5, dist_metric='impr_manh'):
         super().__init__(name="A_STAR", state=state, game=game)
-        # We use deque (which is 2 side queue. We push and pop from same side to simulate a stack)
+
         self.frontier = PriorityQueue()
         self.dist_metric = dist_metric
         self.alpha = alpha
 
     def get_correct_winning_board(self, init_state):
-        """ Math properties of the problem. in order for a board to be solvable (getting from state 1 to 2,
+        """
+        This is a fail and not fit 3x3
+        Math properties of the problem. in order for a board to be solvable (getting from state 1 to 2,
         you need even numbers of `swaps`. where `swap` is exchange between two tiles, until we get from state 1
         to 2) """
         win_boards = self.game.get_winning_boards()
@@ -406,18 +408,46 @@ class IDDFSTilesAgent(TilesAgent):
 
     def solve(self, max_depth=30):
         for i in range(1, max_depth + 1):
-            solution = self.dfs_traverse(i)
+            # solution = self.dfs_traverse(i)
+            solution = self.dfs_recursive_init(i)
             if solution is not None:
                 return solution
         return None
 
-    def dfs_traverse(self, depth=1):
+    def dfs_recursive_init(self, depth=1):
         self.explored = set()
-
         state_hash = self.game.hash_board(self.init_state)
-        # self.explored.add(state_hash)
-
         init_node = Node(self.init_state, depth=0, _hash=state_hash)
+        self.frontier.put(init_node)
+        while not self.frontier.empty():
+            result = self.dfs_recursive(depth)
+            if result != None:
+                return result
+        return None
+
+    def dfs_recursive(self, depth=1):
+        curr_node = self.frontier.get()
+        self.counter_expends += 1
+        self.explored.add(curr_node)
+
+        if curr_node.depth >= depth:
+            return None
+        if self.game.is_final_state(curr_node.state):
+            curr_node.solved = True
+            return curr_node
+
+        valid_moves = self.game.get_valid_moves(curr_node.state, curr_node.action)
+        for move in valid_moves:
+            new_state, actioned_tile = self.game.make_move(curr_node.state, move)
+            new_state_hash = self.game.hash_board(new_state)
+            if new_state_hash not in self.explored:
+                new_node = Node(new_state, parent=curr_node, action=move, actioned_tile=actioned_tile,
+                                depth=curr_node.depth + 1, _hash=new_state_hash)
+                self.frontier.put(new_node)
+
+    def dfs_traverse(self, depth=1):
+
+        init_node = Node(self.init_state, depth=0)
         self.frontier.put(init_node)
 
         while not self.frontier.empty():
@@ -425,7 +455,6 @@ class IDDFSTilesAgent(TilesAgent):
             self.counter_expends += 1
 
             if curr_node.depth >= depth:
-                # self.explored.remove(curr_node._hash)
                 continue
 
             if self.game.is_final_state(curr_node.state):
@@ -435,12 +464,9 @@ class IDDFSTilesAgent(TilesAgent):
             valid_moves = self.game.get_valid_moves(curr_node.state, curr_node.action)
             for move in valid_moves:
                 new_state, actioned_tile = self.game.make_move(curr_node.state, move)
-                new_state_hash = self.game.hash_board(new_state)
-                if new_state_hash not in self.explored:
-                    # self.explored.add(new_state_hash)
-                    new_node = Node(new_state, parent=curr_node, action=move, actioned_tile=actioned_tile,
-                                    depth=curr_node.depth + 1, _hash=new_state_hash)
-                    self.frontier.put(new_node)
+                new_node = Node(new_state, parent=curr_node, action=move, actioned_tile=actioned_tile,
+                                depth=curr_node.depth + 1)
+                self.frontier.put(new_node)
 
 
 class BFSTilesAgent(TilesAgent):
