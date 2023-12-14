@@ -18,7 +18,10 @@ def manhattan_distance(board1, board2):
 
 
 def count_direct_reversal(board1, board2):
-    """ All pairs of neighbors in the 8-tile problem. """
+    """ returns the count of direct reversals. e.x [0 2 1] has one direct reversal because
+    2 suppose to be where 1 and vise versa. """
+
+    #  All pairs of neighbors in the 8-tile problem.
     indices = [((1, 1), (2, 1)), ((1, 0), (2, 0)), ((1, 0), (1, 1)), ((0, 0), (0, 1)),
                ((0, 2), (1, 2)), ((1, 1), (1, 2)), ((2, 1), (2, 2)), ((2, 0), (2, 1)),
                ((0, 1), (0, 2)), ((0, 1), (1, 1)), ((0, 0), (1, 0)), ((1, 2), (2, 2))]
@@ -103,9 +106,11 @@ class Node:
 
 class TilesGame():
     def __init__(self):
-        self.winning_boards = self.get_winning_boards()
         arr = np.repeat(10, 9)
         pwr = np.arange(0, 9)
+        self.winning_boards = self.get_winning_boards()
+        # mults is an array looking like this [1, 10, 100, .., 10**8]
+        # which helps "hash" the board/state
         self.mults = np.power(arr, pwr).reshape((3, 3))
 
     def is_final_state(self, board):
